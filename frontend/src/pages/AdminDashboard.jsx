@@ -36,7 +36,6 @@ export default function AdminDashboard() {
 
     // --- New Academic Setup States ---
     const [coursesList, setCoursesList] = useState([]);
-    const [studentsList, setStudentsList] = useState([]);
     const [academicSubTab, setAcademicSubTab] = useState('programmes');
     const [newCourseForm, setNewCourseForm] = useState({
         code: '', name: '', programme_id: '', level: '', lecturer_id: '',
@@ -55,18 +54,16 @@ export default function AdminDashboard() {
         const fetchAll = async () => {
             try {
                 // Using Promise.all to fetch all data simultaneously
-                const [uRes, pRes, sRes, cRes, studRes] = await Promise.all([
+                const [uRes, pRes, sRes, cRes] = await Promise.all([
                     api.get('/users/', { headers: { Authorization: `Bearer ${token}` } }),
                     api.get('/admin/programmes', { headers: { Authorization: `Bearer ${token}` } }),
                     api.get('/admin/settings', { headers: { Authorization: `Bearer ${token}` } }),
-                    api.get('/admin/courses', { headers: { Authorization: `Bearer ${token}` } }),
-                    api.get('/admin/students', { headers: { Authorization: `Bearer ${token}` } })
+                    api.get('/admin/courses', { headers: { Authorization: `Bearer ${token}` } })
                 ]);
                 setUsersList(uRes.data);
                 setProgrammesList(pRes.data);
                 setSettingsList(sRes.data);
                 setCoursesList(cRes.data);
-                setStudentsList(studRes.data);
 
                 const sObj = {};
                 sRes.data.forEach(s => { sObj[s.key] = s.value; });
@@ -249,7 +246,15 @@ export default function AdminDashboard() {
         }
     };
 
-    const studentCount = usersList.filter(u => u.role === 'student').length || 85;
+    const studentsList = usersList.filter(u => u.role === 'student');
+    const filteredStudentsList = studentsList.filter(s => {
+        if (!studentSearchTerm) return true;
+        const search = studentSearchTerm.toLowerCase();
+        return (s.full_name || '').toLowerCase().includes(search) || 
+               (s.student_reg_number || s.email || '').toLowerCase().includes(search);
+    });
+
+    const studentCount = studentsList.length || 85;
     const lecturerCount = usersList.filter(u => u.role === 'lecturer').length || 12;
     const adminCount = usersList.filter(u => u.role === 'admin' || u.role === 'super_admin').length || 3;
 
@@ -731,13 +736,9 @@ export default function AdminDashboard() {
                                                 <input type="text" placeholder="Search students..." value={studentSearchTerm} onChange={(e) => setStudentSearchTerm(e.target.value)} style={{ padding: '8px 8px 8px 32px', borderRadius: '8px', background: 'rgba(11, 17, 32, 0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '0.85rem', width: isMobile ? '100%' : '200px', minWidth: isMobile ? '220px' : 'unset' }} />
                                             </div>
                                             {(() => {
-                                                const filtered = studentsList.filter(s => 
-                                                    (s.full_name && s.full_name.toLowerCase().includes(studentSearchTerm.toLowerCase())) || 
-                                                    (s.student_reg_number && s.student_reg_number.toLowerCase().includes(studentSearchTerm.toLowerCase()))
-                                                );
-                                                const allSelected = filtered.length > 0 && filtered.every(s => enrolledStudentIds.includes(s.id));
+                                                const allSelected = filteredStudentsList.length > 0 && filteredStudentsList.every(s => enrolledStudentIds.includes(s.id));
                                                 return (
-                                                    <button onClick={() => handleSelectAllStudents(filtered)} style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '6px', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 500 }}>
+                                                    <button onClick={() => handleSelectAllStudents(filteredStudentsList)} style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '6px', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 500 }}>
                                                         {allSelected ? 'Deselect All' : 'Select All'}
                                                     </button>
                                                 )
@@ -745,10 +746,7 @@ export default function AdminDashboard() {
                                         </div>
                                     </div>
                                     <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
-                                        {studentsList.filter(s => 
-                                            (s.full_name && s.full_name.toLowerCase().includes(studentSearchTerm.toLowerCase())) || 
-                                            (s.student_reg_number && s.student_reg_number.toLowerCase().includes(studentSearchTerm.toLowerCase()))
-                                        ).map((s) => (
+                                        {filteredStudentsList.map((s) => (
                                             <div key={s.id} onClick={() => toggleStudentSelection(s.id)} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '12px', background: enrolledStudentIds.includes(s.id) ? 'rgba(59, 130, 246, 0.1)' : 'transparent', border: enrolledStudentIds.includes(s.id) ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', cursor: 'pointer', marginBottom: '0.5rem', transition: 'all 0.1s' }}>
                                                 <input type="checkbox" checked={enrolledStudentIds.includes(s.id)} readOnly style={{ cursor: 'pointer' }} />
                                                 <div>
@@ -757,7 +755,7 @@ export default function AdminDashboard() {
                                                 </div>
                                             </div>
                                         ))}
-                                        {studentsList.length === 0 && <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>No students in system.</div>}
+                                        {filteredStudentsList.length === 0 && <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>No students match your search.</div>}
                                     </div>
                                 </div>
                             </div>
