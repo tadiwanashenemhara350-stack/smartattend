@@ -33,6 +33,18 @@ app.include_router(admin.router)
 def health_check():
     return {"status": "ok"}
 
+@app.get("/debug-500", include_in_schema=False)
+def debug_500():
+    import traceback
+    try:
+        from database import engine
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            user_count = conn.execute(text("SELECT count(*) FROM users")).scalar()
+        return {"status": "ok", "user_count": user_count}
+    except Exception:
+        return {"status": "error", "traceback": traceback.format_exc()}
+
 @app.get("/robots.txt", include_in_schema=False)
 def robots_txt(request: Request):
     body = "\n".join([
