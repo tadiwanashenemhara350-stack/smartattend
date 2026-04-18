@@ -24,6 +24,12 @@ def initialize_super_admin(init_data: schemas.SuperAdminInit, db: Session = Depe
     db.refresh(super_admin)
     return super_admin
 
+@router.get("/nuke-all-users-and-restart")
+def nuke_all_users(db: Session = Depends(get_db)):
+    db.query(models.User).delete()
+    db.commit()
+    return {"message": "All users deleted! You can now go to Login and initialize Super Admin again."}
+
 @router.get("/status")
 def system_status(db: Session = Depends(get_db)):
     user_count = db.query(models.User).count()
