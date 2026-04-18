@@ -44,7 +44,12 @@ export default function Login() {
             setSystemInitialized(true);
             setFormData({ ...formData, password: '' });
         } catch (error) {
-            alert(error.response?.data?.detail || "Initialization failed");
+            const detail = error.response?.data?.detail;
+            if (Array.isArray(detail)) {
+                alert("Validation Error: " + detail.map(d => d.msg).join(', '));
+            } else {
+                alert(detail || (error.message === 'Network Error' ? "Server Unreachable (it may have crashed or is restarting)." : "Initialization failed"));
+            }
         }
     };
 
@@ -153,7 +158,7 @@ export default function Login() {
                         <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
                             <User style={{ position: 'absolute', left: '10px', color: 'var(--text-secondary)' }} size={20} />
                             <input
-                                type="text"
+                                type={isInitializingSuperAdmin ? "email" : "text"}
                                 className="input-field"
                                 style={{ paddingLeft: '40px' }}
                                 value={formData.identifier}
