@@ -51,6 +51,10 @@ def delete_programme(prog_id: int, db: Session = Depends(get_db)):
     prog = db.query(models.Programme).filter(models.Programme.id == prog_id).first()
     if not prog:
         raise HTTPException(status_code=404, detail="Programme not found")
+    
+    # Cascading Delete: Courses belonging to this programme
+    db.query(models.Course).filter(models.Course.programme_id == prog_id).delete()
+
     db.delete(prog)
     db.commit()
     return {"message": "Programme deleted"}
@@ -104,6 +108,11 @@ def delete_course(course_id: int, db: Session = Depends(get_db)):
     course = db.query(models.Course).filter(models.Course.id == course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+    
+    # Cascading Delete: Enrollments and Attendance Records
+    db.query(models.Enrollment).filter(models.Enrollment.course_id == course_id).delete()
+    db.query(models.AttendanceRecord).filter(models.AttendanceRecord.course_id == course_id).delete()
+
     db.delete(course)
     db.commit()
     return {"message": "Course deleted"}
