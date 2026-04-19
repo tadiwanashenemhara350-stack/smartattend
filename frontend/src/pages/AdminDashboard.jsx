@@ -87,7 +87,6 @@ export default function AdminDashboard() {
         try {
             const payload = {
                 role: newUserRole,
-                password: newUserForm.password,
                 full_name: newUserForm.fullName
             };
             if (newUserRole === 'student') payload.student_reg_number = newUserForm.identifier;
@@ -323,7 +322,7 @@ export default function AdminDashboard() {
                     <div style={{ background: '#2563eb', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <QrCode size={20} color="#fff" />
                     </div>
-                    <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>SmartAttend Admin</span>
+                    <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>Ml smart attend Admin</span>
                 </div>
 
                 <nav style={{ display: 'flex', flexDirection: isCompact ? 'row' : 'column', flexWrap: 'wrap', gap: '0.5rem', flex: 1 }}>
@@ -886,10 +885,7 @@ export default function AdminDashboard() {
                                 <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#94a3b8' }}>Full Name</label>
                                 <input type="text" value={newUserForm.fullName} onChange={(e) => setNewUserForm({...newUserForm, fullName: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(11, 17, 32, 0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }} />
                             </div>
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#94a3b8' }}>Initial Password</label>
-                                <input type="password" required value={newUserForm.password} onChange={(e) => setNewUserForm({...newUserForm, password: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(11, 17, 32, 0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }} />
-                            </div>
+
                             <button type="submit" style={{ marginTop: '1rem', background: '#2563eb', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
                                 Add User
                             </button>
