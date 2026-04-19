@@ -28,7 +28,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         email=user.email,
         student_reg_number=user.student_reg_number,
         lecturer_id=user.lecturer_id,
-        password_hash=get_password_hash(user.password)
+        password_hash=get_password_hash(user.password) if user.password else None
     )
     db.add(new_user)
     db.commit()
@@ -46,6 +46,12 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
     if user.role == "super_admin":
         raise HTTPException(status_code=403, detail="Cannot delete super_admin")
+    # Cascading deletes
+    db.query(models.Enrollment).filter(models.Enrollment.student_id == user_id).delete()
+    db.query(models.AttendanceRecord).filter(models.AttendanceRecord.student_id == user_id).delete()
+    if user.role == "lecturer":
+        db.query(models.Course).filter(models.Course.lecturer_id == user_id).delete()
+
     db.delete(user)
     db.commit()
     return {"message": "User deleted"}
