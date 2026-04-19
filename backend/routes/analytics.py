@@ -164,21 +164,32 @@ def get_student_dashboard_analytics(user_id: int, db: Session = Depends(get_db))
         current_val = min(100, max(0, current_val + random.randint(-10, 10)))
 
     # 5. ML Insights Logic
-    risk_classification = "Low Risk"
-    risk_description = "Your attendance is solidly on track."
-    trajectory = "Stable"
-    trajectory_description = "Based on recent patterns, you are securely maintaining acceptable thresholds."
+    if len(records) == 0:
+        risk_classification = "Awaiting Logs"
+        risk_description = "Attend your first class to begin trajectory analysis."
+        trajectory = "Initializing"
+        trajectory_description = "Machine learning models are awaiting baseline data."
+    else:
+        risk_classification = "Low Risk"
+        risk_description = "Your attendance is solidly on track. Keep it up!"
+        trajectory = "Stable"
+        trajectory_description = "Based on recent patterns, you are securely maintaining optimal thresholds."
 
-    if overall_rate < 50:
-        risk_classification = "High Risk"
-        risk_description = f"Your attendance has dropped critically. You are at {overall_rate}% globally."
-        trajectory = "Declining"
-        trajectory_description = "Urgent: You are unlikely to meet the passing threshold without immediate intervention."
-    elif overall_rate < 80:
-        risk_classification = "Medium Risk"
-        risk_description = f"You are sitting at {overall_rate}%, slightly below optimal."
-        trajectory = "Improving"
-        trajectory_description = "Based on recent patterns, recovering the 80% threshold is manageable."
+        if overall_rate < 50:
+            risk_classification = "High Risk"
+            risk_description = f"Critical: Your attendance is only {overall_rate}%. Action required to avoid module failure."
+            trajectory = "Declining"
+            trajectory_description = "Urgent: You are currently on track to fall below the minimum academic requirement."
+        elif overall_rate < 80:
+            risk_classification = "Medium Risk"
+            risk_description = f"Warning: You are at {overall_rate}%. A few more absences will trigger academic review."
+            trajectory = "Volatile"
+            trajectory_description = "Recent inconsistencies suggest a need for regular attendance to stabilize progress."
+        elif overall_rate >= 90:
+            risk_classification = "Elite"
+            risk_description = "Exceptional commitment. Your attendance is among the highest in your cohort."
+            trajectory = "Ascending"
+            trajectory_description = "You are maintaining a near-perfect trajectory. Excellent work."
 
     return {
         "programme": programme_name,
