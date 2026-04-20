@@ -8,3 +8,6 @@ passlib[bcrypt]
 bcrypt==3.2.0
 email-validator
 psycopg2-binary
+scikit-learn
+pandas
+joblib
