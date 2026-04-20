@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
-from ml.predictor import predict_risk
+from ml.predictor import predict_risk, get_risk_probability
 import models
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -18,13 +18,15 @@ def get_student_risk(student_id: int, db: Session = Depends(get_db)):
     late_arrivals = len([r for r in attendance_records if r.status == "Late"])
     
     is_at_risk = predict_risk(total_classes, classes_attended, late_arrivals)
+    risk_prob = get_risk_probability(total_classes, classes_attended, late_arrivals)
     
     return {
         "student_id": student_id,
         "classes_attended": classes_attended,
         "total_classes": total_classes,
         "late_arrivals": late_arrivals,
-        "is_at_risk": is_at_risk
+        "is_at_risk": is_at_risk,
+        "risk_probability": risk_prob
     }
 
 @router.get("/lecturer/{user_id}")
@@ -163,33 +165,40 @@ def get_student_dashboard_analytics(user_id: int, db: Session = Depends(get_db))
         weekly_trend.insert(0, min(100, max(0, current_val + random.randint(-5, 5))))
         current_val = min(100, max(0, current_val + random.randint(-10, 10)))
 
-    # 5. ML Insights Logic
+    # 5. ML Insights Logic powered by Scikit-Learn RandomForest
     if len(records) == 0:
         risk_classification = "Awaiting Logs"
         risk_description = "Attend your first class to begin trajectory analysis."
         trajectory = "Initializing"
         trajectory_description = "Machine learning models are awaiting baseline data."
     else:
-        risk_classification = "Low Risk"
-        risk_description = "Your attendance is solidly on track. Keep it up!"
-        trajectory = "Stable"
-        trajectory_description = "Based on recent patterns, you are securely maintaining optimal thresholds."
-
-        if overall_rate < 50:
+        # Calculate lateness
+        late_arrivals = len([r for r in records if r.status == "Late"])
+        
+        # Get true probability from our Random Forest Moddel
+        risk_prob = get_risk_probability(total_classes_possible, classes_attended, late_arrivals)
+        
+        # Translate statistical probabilities to UI readable labels
+        if risk_prob > 0.60:
             risk_classification = "High Risk"
-            risk_description = f"Critical: Your attendance is only {overall_rate}%. Action required to avoid module failure."
+            risk_description = f"Critical: Model detects a {round(risk_prob*100)}% probability of trajectory failure based on historic data."
             trajectory = "Declining"
-            trajectory_description = "Urgent: You are currently on track to fall below the minimum academic requirement."
-        elif overall_rate < 80:
+            trajectory_description = "Urgent Intervention Required. Your pattern mirrors historic dropout paths."
+        elif risk_prob > 0.25:
             risk_classification = "Medium Risk"
-            risk_description = f"Warning: You are at {overall_rate}%. A few more absences will trigger academic review."
+            risk_description = f"Warning: {round(risk_prob*100)}% risk probability detected. Consistency is faltering."
             trajectory = "Volatile"
-            trajectory_description = "Recent inconsistencies suggest a need for regular attendance to stabilize progress."
-        elif overall_rate >= 90:
+            trajectory_description = "Recent inconsistencies indicate deviation from safe attendance boundaries."
+        elif risk_prob < 0.05 and overall_rate >= 90:
             risk_classification = "Elite"
-            risk_description = "Exceptional commitment. Your attendance is among the highest in your cohort."
+            risk_description = "Exceptional commitment detected. <5% historic failure risk."
             trajectory = "Ascending"
-            trajectory_description = "You are maintaining a near-perfect trajectory. Excellent work."
+            trajectory_description = "Maintaining optimal trajectories that mathematically align with top performers."
+        else:
+            risk_classification = "Low Risk"
+            risk_description = "Solid statistical metrics. Your attendance model matches standard passing cohorts."
+            trajectory = "Stable"
+            trajectory_description = "You are securely maintaining optimal thresholds."
 
     return {
         "programme": programme_name,
