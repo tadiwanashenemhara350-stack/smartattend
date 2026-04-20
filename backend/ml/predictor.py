@@ -32,7 +32,7 @@ def predict_risk(total_classes: int, classes_attended: int, late_arrivals: int) 
     return bool(prediction[0] == 1)
 
 def get_risk_probability(total_classes: int, classes_attended: int, late_arrivals: int) -> float:
-    \"\"\"Returns the raw probability of failure for dashboard UI.\"\"\"
+    """Returns the raw probability of failure for dashboard UI."""
     if total_classes == 0 or rf_model is None:
         return 0.0
         
