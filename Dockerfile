@@ -2,7 +2,7 @@ FROM node:22-bookworm-slim AS frontend-build
 
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci --legacy-peer-deps
+RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
@@ -23,4 +23,4 @@ COPY --from=frontend-build /app/frontend/public ./frontend/public
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "cd /app/backend && uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+CMD ["sh", "-c", "cd /app/backend && python ml/seed_system.py && uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
