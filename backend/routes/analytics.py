@@ -8,11 +8,14 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 @router.get("/risk/{student_id}")
 def get_student_risk(student_id: int, db: Session = Depends(get_db)):
-    # Simulating a total number of class occurrences
-    total_classes = 15
     attendance_records = db.query(models.AttendanceRecord).filter(
         models.AttendanceRecord.student_id == student_id
     ).all()
+    
+    # Total classes is now the sum of sessions for enrolled courses
+    enrollments = db.query(models.Enrollment).filter(models.Enrollment.student_id == student_id).all()
+    course_ids = [e.course_id for e in enrollments]
+    total_classes = db.query(models.ModuleSession).filter(models.ModuleSession.course_id.in_(course_ids)).count() if course_ids else 0
     
     classes_attended = len([r for r in attendance_records if r.status == "Present"])
     late_arrivals = len([r for r in attendance_records if r.status == "Late"])
@@ -71,25 +74,28 @@ def get_lecturer_analytics(user_id: int, db: Session = Depends(get_db)):
     students_data = db.query(models.User).filter(models.User.id.in_(unique_students)).all()
     student_map = {s.id: s for s in students_data}
 
+    from ml.predictor import get_risk_probability
+
     for s_id in unique_students:
         s_records = [r for r in records if r.student_id == s_id]
-        s_classes = len(s_records)
+        s_classes = len(s_records) # Since dataset has Present, Late, and Absent rows
         if s_classes == 0:
             continue
             
         s_present = len([r for r in s_records if r.status == "Present"])
         s_late = len([r for r in s_records if r.status == "Late"])
         
-        # Simple rule: if attendance falls below 60% they are high risk
-        attendance_percentage = (s_present / s_classes) * 100
-        if attendance_percentage < 60:
+        # ML model prediction
+        risk_prob = get_risk_probability(s_classes, s_present, s_late)
+        
+        if risk_prob > 0.60:
             student_info = student_map.get(s_id)
             if student_info:
                 at_risk_students.append({
                     "id": student_info.id,
                     "name": student_info.full_name or "Unknown",
                     "identifier": student_info.student_reg_number or student_info.email,
-                    "risk": f"{round(attendance_percentage)}% High Risk"
+                    "risk": f"{round(risk_prob*100)}% High Risk"
                 })
 
     return {
@@ -130,23 +136,24 @@ def get_student_dashboard_analytics(user_id: int, db: Session = Depends(get_db))
         models.AttendanceRecord.course_id.in_(course_ids)
     ).all() if course_ids else []
 
-    total_classes_possible = len(courses) * 15 # mock 15 sessions per enrolled module if no data
+    # Using real sessions for total classes
+    session_count_per_course = {}
+    if course_ids:
+        sessions = db.query(models.ModuleSession).filter(models.ModuleSession.course_id.in_(course_ids)).all()
+        for s in sessions:
+            session_count_per_course[s.course_id] = session_count_per_course.get(s.course_id, 0) + 1
+            
+    total_classes_possible = sum(session_count_per_course.values())
     classes_attended = len([r for r in records if r.status == "Present"])
-    
-    # In reality, missed classes would be recorded as 'Absent' or via schedule diff, 
-    # we mock classes_missed as (total recorded - attended) or random logic if records are sparse
     classes_missed = len([r for r in records if r.status == "Absent"])
 
     overall_rate = round((classes_attended / total_classes_possible) * 100) if total_classes_possible > 0 else 100
-    if len(records) > 0:
-        overall_rate = round((classes_attended / len(records)) * 100)
-        classes_missed = len(records) - classes_attended
 
     # 3. Enrolled Modules Array
     enrolled_modules = []
     for c in courses:
         c_records = [r for r in records if r.course_id == c.id]
-        c_total = len(c_records)
+        c_total = session_count_per_course.get(c.id, 0)
         c_present = len([r for r in c_records if r.status == "Present"])
         rate = round((c_present / c_total * 100)) if c_total > 0 else 100
         enrolled_modules.append({
@@ -156,14 +163,50 @@ def get_student_dashboard_analytics(user_id: int, db: Session = Depends(get_db))
         })
 
     # 4. Weekly trend generation
-    import random
-    # Instead of full datetime parsing, we map out a realistic 7-week trajectory 
-    # curving towards their current overall rate.
     weekly_trend = []
-    current_val = overall_rate
-    for i in range(7):
-        weekly_trend.insert(0, min(100, max(0, current_val + random.randint(-5, 5))))
-        current_val = min(100, max(0, current_val + random.randint(-10, 10)))
+    # Calculate real trend based on the Date of attendance
+    if course_ids:
+        # Get all sessions ordered by date
+        sorted_sessions = sorted(sessions, key=lambda s: s.date)
+        
+        # We need a mapping from session_id to date to align records
+        session_dates = {s.id: s.date for s in sorted_sessions}
+        
+        # Group records by date
+        from collections import defaultdict
+        records_by_date = defaultdict(list)
+        for r in records:
+            if r.session_id and r.session_id in session_dates:
+                records_by_date[session_dates[r.session_id]].append(r)
+                
+        # To make a trend, let's take chronological unique dates and calculate running percentage
+        running_possible = 0
+        running_attended = 0
+        
+        sessions_by_date = defaultdict(list)
+        for s in sorted_sessions:
+            sessions_by_date[s.date].append(s)
+            
+        unique_dates = sorted(list(sessions_by_date.keys()))
+        
+        for date_val in unique_dates:
+            date_sessions = sessions_by_date[date_val]
+            running_possible += len(date_sessions)
+            
+            # calculate attended on this date
+            day_records = records_by_date.get(date_val, [])
+            running_attended += len([r for r in day_records if r.status == "Present"])
+            
+            rate = round((running_attended / running_possible) * 100) if running_possible > 0 else 100
+            weekly_trend.append(rate)
+            
+    # If the trend has more than 7 points, just take the most recent 7 (or sample them)
+    if len(weekly_trend) > 10:
+        # Take 10 evenly spaced points
+        step = len(weekly_trend) / 10
+        weekly_trend = [weekly_trend[int(i*step)] for i in range(10)]
+    elif len(weekly_trend) == 0:
+        weekly_trend = [overall_rate] * 7
 
     # 5. ML Insights Logic powered by Scikit-Learn RandomForest
     if len(records) == 0:
