@@ -5,10 +5,11 @@ import models, schemas
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-from utils import get_password_hash
+from deps import get_admin_user, get_current_user
+from utils import get_password_hash, verify_password
 
 @router.post("/")
-def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), admin: models.User = Depends(get_admin_user)):
     existing_user = None
     if user.role == "student" and user.student_reg_number:
         existing_user = db.query(models.User).filter(models.User.student_reg_number == user.student_reg_number).first()
@@ -55,3 +56,12 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     db.delete(user)
     db.commit()
     return {"message": "User deleted"}
+
+@router.post("/change-password")
+def change_password(data: schemas.PasswordChange, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if not verify_password(data.old_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Incorrect old password")
+    
+    current_user.password_hash = get_password_hash(data.new_password)
+    db.commit()
+    return {"message": "Password updated successfully"}
