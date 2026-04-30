@@ -82,3 +82,27 @@ class Enrollment(Base):
     
     student = relationship("User", foreign_keys=[student_id])
     course = relationship("Course", foreign_keys=[course_id])
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    title = Column(String)
+    message = Column(String)
+    type = Column(String) # "info", "warning", "risk", "attendance"
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    user = relationship("User")
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"))
+    receiver_id = Column(Integer, ForeignKey("users.id"), nullable=True) # If null, it's for system/admin
+    subject = Column(String)
+    message = Column(String)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    sender = relationship("User", foreign_keys=[sender_id])
+    receiver = relationship("User", foreign_keys=[receiver_id])
