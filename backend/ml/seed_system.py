@@ -100,8 +100,6 @@ def run_seed():
                 db.add(user)
                 lecturers[lect_id] = user
                 
-            db.flush()
-            
             if module not in courses:
                 # Module Code hack (take initials)
                 code_words = module.split()
@@ -109,9 +107,13 @@ def run_seed():
                 base_code = "".join(w[0] for w in code_words).upper()
                 c = 101
                 code = f"{base_code}{c}"
-                while code in [cs.code for cs in courses.values()]:
+                # We need a way to check existing codes without flushing every time.
+                # Let's just use a set of codes in memory.
+                if not hasattr(run_seed, "_codes"): run_seed._codes = set()
+                while code in run_seed._codes:
                     c += 1
                     code = f"{base_code}{c}"
+                run_seed._codes.add(code)
 
                 course = Course(
                     name=module,
@@ -123,8 +125,9 @@ def run_seed():
                 db.add(course)
                 courses[module] = course
             
-            db.flush()
-            
+            # Need to flush to ensure course.id is available for sessions
+            if row_count % 100 == 0: db.flush()
+
             session_key = (courses[module].id, date_val, time_slot)
             if session_key not in sessions:
                 session = ModuleSession(
@@ -136,7 +139,7 @@ def run_seed():
                 db.add(session)
                 sessions[session_key] = session
             
-            db.flush()
+            if row_count % 100 == 0: db.flush()
             
             if not hasattr(students[stud_id], "_enrolled"):
                 students[stud_id]._enrolled = set()
@@ -167,6 +170,7 @@ def run_seed():
             
             if row_count % 1000 == 0:
                 print(f"Processed {row_count} rows...")
+                db.flush() # Periodic flush to keep memory in check and get IDs for relationships
 
     print("Committing to database...")
     db.commit()
