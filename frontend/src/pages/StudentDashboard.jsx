@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import QrScanner from '../components/QrScanner';
-import { LogOut, QrCode, UserCircle, AlertTriangle, TrendingUp, BookOpen, Bell } from 'lucide-react';
+import { LogOut, QrCode, UserCircle, AlertTriangle, TrendingUp, BookOpen, Bell, MessageSquare, Shield, Key, Send } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Filler } from 'chart.js';
@@ -36,11 +36,18 @@ export default function StudentDashboard() {
     });
 
     const [isScanning, setIsScanning] = useState(false);
-    const [notifications, setNotifications] = useState([
-        { id: 1, title: "Lesson Reminder", message: "Your CS201 class starts in 15 minutes.", type: "info" },
-        { id: 2, title: "Attendance Alert", message: "You missed yesterday's Data Structures class.", type: "warning" }
-    ]);
+    const [notifications, setNotifications] = useState([]);
     const [showNotifications, setShowNotifications] = useState(false);
+    
+    // Feedback State
+    const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+    const [feedbackSubject, setFeedbackSubject] = useState("");
+    const [feedbackMessage, setFeedbackMessage] = useState("");
+    
+    // Password State
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [oldPassword, setOldPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
 
     useEffect(() => {
         if (!token || !userId) {
@@ -48,19 +55,21 @@ export default function StudentDashboard() {
             return;
         }
 
-        const fetchStudentData = async () => {
+        const fetchData = async () => {
             try {
-                const res = await api.get(`/analytics/student_dashboard/${userId}`, {
-                    headers: { Authorization: `Bearer ${token}` } 
-                });
-                setAnalytics(res.data);
+                const [analyticsRes, notifRes] = await Promise.all([
+                    api.get(`/analytics/student_dashboard/${userId}`, { headers: { Authorization: `Bearer ${token}` } }),
+                    api.get('/notifications/', { headers: { Authorization: `Bearer ${token}` } })
+                ]);
+                setAnalytics(analyticsRes.data);
+                setNotifications(notifRes.data);
             } catch (err) {
-                console.error("Failed to load student data", err);
+                console.error("Failed to load data", err);
             }
         };
 
-        fetchStudentData();
-        const interval = setInterval(fetchStudentData, 10000);
+        fetchData();
+        const interval = setInterval(fetchData, 10000);
         return () => clearInterval(interval);
     }, [token, userId, navigate]);
 
@@ -80,6 +89,45 @@ export default function StudentDashboard() {
                 alert('Error logging attendance. Ensure this is a valid lecturer QR token.');
                 setIsScanning(false);
             }
+        }
+    };
+
+    const handleSendFeedback = async () => {
+        try {
+            await api.post('/feedback/', {
+                subject: feedbackSubject,
+                message: feedbackMessage
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            alert("Feedback sent to administrators.");
+            setShowFeedbackModal(false);
+            setFeedbackSubject("");
+            setFeedbackMessage("");
+        } catch (err) {
+            alert("Failed to send feedback.");
+        }
+    };
+
+    const handleChangePassword = async () => {
+        try {
+            await api.post('/users/change-password', {
+                old_password: oldPassword,
+                new_password: newPassword
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            alert("Password changed successfully.");
+            setShowPasswordModal(false);
+            setOldPassword("");
+            setNewPassword("");
+        } catch (err) {
+            alert(err.response?.data?.detail || "Failed to change password.");
+        }
+    };
+
+    const markNotificationRead = async (id) => {
+        try {
+            await api.post(`/notifications/${id}/read`, {}, { headers: { Authorization: `Bearer ${token}` } });
+            setNotifications(notifications.filter(n => n.id !== id));
+        } catch (err) {
+            console.error(err);
         }
     };
 
@@ -121,12 +169,12 @@ export default function StudentDashboard() {
         }
     };
 
-    // Helper functions for dynamic styles
     const getRiskColor = (risk) => {
         if (!risk) return "#94a3b8";
-        if (risk.toLowerCase().includes("high")) return "#ef4444";
-        if (risk.toLowerCase().includes("medium")) return "#f59e0b";
-        if (risk.toLowerCase().includes("low")) return "#10b981";
+        const r = risk.toLowerCase();
+        if (r.includes("high") || r.includes("declining")) return "#ef4444";
+        if (r.includes("medium") || r.includes("volatile")) return "#f59e0b";
+        if (r.includes("low") || r.includes("stable") || r.includes("elite") || r.includes("ascending")) return "#10b981";
         return "#94a3b8";
     };
 
@@ -147,202 +195,236 @@ export default function StudentDashboard() {
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 flexDirection: isMobile ? 'column' : 'row',
                 gap: isMobile ? '0.75rem' : 0,
-                padding: isCompact ? '1rem 1.25rem' : '1.2rem 3rem', background: 'rgba(11, 17, 32, 0.35)',
-                backdropFilter: 'blur(4px)', borderBottom: '1px solid rgba(255,255,255,0.05)',
+                padding: isCompact ? '1rem 1.25rem' : '1.2rem 3rem', background: 'rgba(11, 17, 32, 0.65)',
+                backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.08)',
                 position: 'sticky', top: 0, zIndex: 110
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{ background: '#2563eb', padding: '8px', borderRadius: '8px', display: 'flex' }}>
-                        <QrCode size={20} color="#fff" />
+                        <TrendingUp size={20} color="#fff" />
                     </div>
-                    <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>Ml smart attend</span>
+                    <span style={{ fontSize: '1.2rem', fontWeight: 'bold', letterSpacing: '0.5px' }}>SmartAttend AI</span>
                 </div>
                 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', justifyContent: isMobile ? 'center' : 'flex-end' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', flexWrap: 'wrap', justifyContent: isMobile ? 'center' : 'flex-end' }}>
                     <div style={{ position: 'relative' }}>
-                        <div onClick={() => setShowNotifications(!showNotifications)} style={{ cursor: 'pointer', position: 'relative', display: 'flex', padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                            <Bell size={20} color="#94a3b8" />
-                            {notifications.length > 0 && <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#ef4444', height: '18px', minWidth: '18px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 'bold', color: '#fff', border: '2px solid #0f172a' }}>{notifications.length}</span>}
+                        <div onClick={() => setShowNotifications(!showNotifications)} style={{ cursor: 'pointer', position: 'relative', display: 'flex', padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                            <Bell size={20} color={notifications.some(n => !n.is_read) ? "#3b82f6" : "#94a3b8"} />
+                            {notifications.filter(n => !n.is_read).length > 0 && <span style={{ position: 'absolute', top: '-2px', right: '-2px', background: '#ef4444', height: '18px', minWidth: '18px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 'bold', color: '#fff', border: '2px solid #0f172a' }}>{notifications.filter(n => !n.is_read).length}</span>}
                         </div>
                         
                         {showNotifications && (
-                            <div style={{ position: 'absolute', top: '120%', right: 0, width: '300px', background: 'rgba(11, 17, 32, 0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '1rem', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', zIndex: 200 }}>
-                                <h4 style={{ margin: '0 0 1rem 0', fontSize: '1rem' }}>Notifications</h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                    {notifications.map(n => (
-                                        <div key={n.id} style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', borderLeft: `4px solid ${n.type === 'warning' ? '#f59e0b' : '#3b82f6'}` }}>
-                                            <div style={{ fontWeight: 'bold', fontSize: '0.85rem', marginBottom: '2px' }}>{n.title}</div>
-                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{n.message}</div>
+                            <div style={{ position: 'absolute', top: '125%', right: 0, width: '320px', background: 'rgba(15, 23, 42, 0.98)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '16px', padding: '1.2rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)', zObject: 200 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                    <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '600' }}>Updates</h4>
+                                    <span style={{ fontSize: '0.75rem', color: '#3b82f6', cursor: 'pointer' }} onClick={() => setNotifications([])}>Clear all</span>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '350px', overflowY: 'auto', paddingRight: '4px' }}>
+                                    {notifications.length > 0 ? notifications.map(n => (
+                                        <div key={n.id} onClick={() => markNotificationRead(n.id)} style={{ cursor: 'pointer', padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', borderLeft: `4px solid ${getRiskColor(n.type)}`, transition: 'transform 0.2s' }}>
+                                            <div style={{ fontWeight: '600', fontSize: '0.85rem', marginBottom: '4px', color: '#f1f5f9' }}>{n.title}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', lineHeight: '1.4' }}>{n.message}</div>
                                         </div>
-                                    ))}
+                                    )) : <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b', fontSize: '0.9rem' }}>No new updates</div>}
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.05)', padding: '6px 16px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', maxWidth: '100%' }}>
-                        <div style={{ width: '8px', height: '8px', background: '#10b981', borderRadius: '50%' }}></div>
-                        <span style={{ fontSize: '0.9rem', color: '#cbd5e1' }}>{studentIdentifier}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.05)', padding: '8px 18px', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <div style={{ width: '8px', height: '8px', background: '#10b981', borderRadius: '50%', boxShadow: '0 0 8px #10b98180' }}></div>
+                        <span style={{ fontSize: '0.9rem', color: '#e2e8f0', fontWeight: '500' }}>{studentIdentifier}</span>
                     </div>
-                    <LogOut size={20} color="#94a3b8" style={{ cursor: 'pointer', transition: 'color 0.2s' }} onClick={logout} onMouseOver={(e) => e.target.style.color='#ef4444'} onMouseOut={(e) => e.target.style.color='#94a3b8'} />
+                    <LogOut size={20} color="#94a3b8" style={{ cursor: 'pointer', transition: 'all 0.2s' }} onClick={logout} />
                 </div>
             </header>
 
-            {/* Main Layout Grid */}
-            <main style={{ padding: isCompact ? '1rem' : '2rem 3rem', flex: 1, display: 'grid', gridTemplateColumns: isCompact ? '1fr' : 'minmax(350px, 400px) 1fr', gap: '2rem' }}>
+            {/* Main Content Area */}
+            <main style={{ padding: isCompact ? '1rem' : '2rem 3rem', flex: 1, display: 'grid', gridTemplateColumns: isCompact ? '1fr' : '380px 1fr', gap: '2rem' }}>
                 
-                {/* Left Column */}
+                {/* Left Side: Profile & ML Insights (Prioritized) */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                     
-                    {/* Profile Panel */}
-                    <div style={{ background: 'rgba(17, 24, 39, 0.25)', backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '2rem', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: '1.5rem' }}>
-                        <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.1)' }}>
-                            <UserCircle size={48} color="#94a3b8" />
-                        </div>
-                        <div>
-                            <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.6rem', fontWeight: 'bold' }}>{studentName}</h2>
-                            <p style={{ margin: 0, color: '#94a3b8', fontSize: '1rem', marginBottom: '0.8rem' }}>{analytics.programme}</p>
-                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                <span style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', padding: '4px 10px', borderRadius: '4px', fontSize: '0.85rem' }}>{analytics.level}</span>
-                                <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '4px 10px', borderRadius: '4px', fontSize: '0.85rem' }}>Active</span>
+                    {/* User Summary Card */}
+                    <div style={{ background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.2) 100%)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '24px', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+                            <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '14px', borderRadius: '20px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                                <UserCircle size={44} color="#3b82f6" />
+                            </div>
+                            <div>
+                                <h2 style={{ margin: '0 0 4px 0', fontSize: '1.4rem', fontWeight: 'bold' }}>{studentName}</h2>
+                                <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.9rem' }}>{analytics.programme}</p>
                             </div>
                         </div>
-                    </div>
-
-                    {/* Camera / Scanner / Action Panel */}
-                    <div style={{ background: 'rgba(17, 24, 39, 0.25)', backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '2.5rem 2rem', textAlign: 'center' }}>
-                        <div style={{ display: 'inline-flex', background: 'rgba(46, 204, 113, 0.1)', padding: '1.2rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid rgba(46, 204, 113, 0.2)' }}>
-                            <QrCode size={40} color="#3b82f6" />
+                        <div style={{ display: 'flex', gap: '0.8rem' }}>
+                            <span style={{ flex: 1, textAlign: 'center', background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa', padding: '8px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600', border: '1px solid rgba(59, 130, 246, 0.1)' }}>{analytics.level}</span>
+                            <button onClick={() => setShowPasswordModal(true)} style={{ background: 'rgba(255,255,255,0.05)', color: '#cbd5e1', padding: '8px 16px', borderRadius: '12px', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Key size={14} /> Password
+                            </button>
                         </div>
-                        <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.3rem', fontWeight: 'bold' }}>Record Attendance</h3>
-                        <p style={{ margin: '0 0 2rem 0', color: '#94a3b8', fontSize: '0.95rem' }}>Scan the secure token for your current class.</p>
-
-                        {!isScanning ? (
-                             <button onClick={() => setIsScanning(true)} style={{ width: '100%', padding: '14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                 Launch Scanner
-                             </button>
-                        ) : (
-                             <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: '12px', overflow: 'hidden', padding: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                 <QrScanner
-                                     onScanSuccess={(decodedText) => handleScan(decodedText)}
-                                     onScanFailure={() => {}}
-                                 />
-                                 <button onClick={() => setIsScanning(false)} style={{ width: '100%', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginTop: '12px' }}>
-                                     Close Scanner
-                                 </button>
-                             </div>
-                        )}
                     </div>
 
-                    {/* ML Insights Panel */}
-                    <div style={{ background: 'rgba(17, 24, 39, 0.25)', backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '2rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem' }}>
-                            <TrendingUp size={20} color="#c084fc" />
-                            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 'bold' }}>ML Predictive Insights</h3>
+                    {/* AI RISK INSIGHTS (Prominent) */}
+                    <div style={{ background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(10px)', border: '2px solid rgba(59, 130, 246, 0.1)', borderRadius: '24px', padding: '2rem', position: 'relative', overflow: 'hidden' }}>
+                        <div style={{ position: 'absolute', top: '-20px', right: '-20px', opacity: 0.05 }}>
+                            <TrendingUp size={150} color="#3b82f6" />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.8rem' }}>
+                            <Shield size={22} color="#60a5fa" />
+                            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold', color: '#f1f5f9' }}>CRISP-DM Intelligence</h3>
                         </div>
                         
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                            <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: '0.5rem', marginBottom: '0.8rem' }}>
-                                    <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Risk Assessment</span>
-                                    <span style={{ color: getRiskColor(analytics.ml_insights.risk_classification), border: `1px solid ${getRiskColor(analytics.ml_insights.risk_classification)}30`, background: `${getRiskColor(analytics.ml_insights.risk_classification)}15`, padding: '4px 10px', borderRadius: '6px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        <AlertTriangle size={14} /> {analytics.ml_insights.risk_classification}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                            <div style={{ background: 'rgba(2, 6, 23, 0.4)', borderRadius: '18px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.04)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+                                    <span style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: '500' }}>Risk Classification</span>
+                                    <span style={{ color: getRiskColor(analytics.ml_insights.risk_classification), background: `${getRiskColor(analytics.ml_insights.risk_classification)}15`, padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold', border: `1px solid ${getRiskColor(analytics.ml_insights.risk_classification)}30` }}>
+                                        {analytics.ml_insights.risk_classification.toUpperCase()}
                                     </span>
                                 </div>
-                                <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: '1.5', color: '#cbd5e1' }}>{analytics.ml_insights.description}</p>
+                                <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.6', color: '#cbd5e1' }}>{analytics.ml_insights.description}</p>
                             </div>
 
-                            <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: '0.5rem', marginBottom: '0.8rem' }}>
-                                    <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Attendance Trajectory</span>
-                                    <span style={{ color: getRiskColor(analytics.ml_insights.trajectory), border: `1px solid ${getRiskColor(analytics.ml_insights.trajectory)}30`, background: `${getRiskColor(analytics.ml_insights.trajectory)}15`, padding: '4px 10px', borderRadius: '6px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        <TrendingUp size={14} /> {analytics.ml_insights.trajectory}
+                            <div style={{ background: 'rgba(2, 6, 23, 0.4)', borderRadius: '18px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.04)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+                                    <span style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: '500' }}>Predictive Trajectory</span>
+                                    <span style={{ color: getRiskColor(analytics.ml_insights.trajectory), background: `${getRiskColor(analytics.ml_insights.trajectory)}15`, padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold', border: `1px solid ${getRiskColor(analytics.ml_insights.trajectory)}30` }}>
+                                        {analytics.ml_insights.trajectory.toUpperCase()}
                                     </span>
                                 </div>
-                                <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: '1.5', color: '#cbd5e1' }}>{analytics.ml_insights.trajectory_description}</p>
+                                <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.6', color: '#cbd5e1' }}>{analytics.ml_insights.trajectory_description}</p>
                             </div>
                         </div>
                     </div>
 
+                    {/* Attendance Scanning */}
+                    <div style={{ background: 'rgba(30, 41, 59, 0.3)', backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '24px', padding: '2rem', textAlign: 'center' }}>
+                         {!isScanning ? (
+                            <>
+                                <div style={{ display: 'inline-flex', background: 'rgba(59, 130, 246, 0.1)', padding: '1.2rem', borderRadius: '20px', marginBottom: '1.2rem' }}>
+                                    <QrCode size={32} color="#3b82f6" />
+                                </div>
+                                <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', fontWeight: 'bold' }}>Scan to Log</h3>
+                                <p style={{ margin: '0 0 1.5rem 0', color: '#94a3b8', fontSize: '0.85rem' }}>Hold your phone to the lecturer's QR code.</p>
+                                <button onClick={() => setIsScanning(true)} style={{ width: '100%', padding: '14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)' }}>
+                                    Launch Scanner
+                                </button>
+                            </>
+                         ) : (
+                            <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: '20px', overflow: 'hidden', padding: '12px' }}>
+                                <QrScanner onScanSuccess={(decodedText) => handleScan(decodedText)} onScanFailure={() => {}} />
+                                <button onClick={() => setIsScanning(false)} style={{ width: '100%', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', marginTop: '12px' }}>Cancel</button>
+                            </div>
+                         )}
+                    </div>
+
+                    {/* Feedback / Support Button */}
+                    <button onClick={() => setShowFeedbackModal(true)} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '1.2rem', borderRadius: '20px', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem' }}>
+                        <MessageSquare size={18} /> Send Feedback or Report Issue
+                    </button>
                 </div>
 
-                {/* Right Column */}
+                {/* Right Side: Detailed Stats & Trends */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                     
-                    {/* Top 4 Stats */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1.5rem' }}>
-                        <div style={{ background: 'rgba(17, 24, 39, 0.25)', backdropFilter: 'blur(4px)', padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ color: '#94a3b8', marginBottom: '1rem', fontSize: '0.9rem' }}>Overall Rate</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontSize: '2.2rem', fontWeight: 'bold', color: '#3b82f6' }}>{analytics.overall_rate}%</span>
-                                <span style={{ fontSize: '0.85rem', color: analytics.overall_rate >= 50 ? '#10b981' : '#ef4444' }}>{analytics.overall_rate >= 75 ? "Optimal" : "Poor"}</span>
+                    {/* High Level Metrics */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+                        {[
+                            { label: 'Overall Rate', val: `${analytics.overall_rate}%`, color: '#3b82f6', detail: analytics.overall_rate >= 75 ? "Optimal" : "Concern" },
+                            { label: 'Classes Attended', val: analytics.classes_attended, color: '#10b981', detail: "Verified Logs" },
+                            { label: 'Total Possible', val: analytics.classes_attended + analytics.classes_missed, color: '#f59e0b', detail: "Session Total" },
+                            { label: 'Missed Sessions', val: analytics.classes_missed, color: '#ef4444', detail: analytics.classes_missed > 3 ? "Alert" : "Low" }
+                        ].map((stat, i) => (
+                            <div key={i} style={{ background: 'rgba(30, 41, 59, 0.25)', padding: '1.5rem', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                                <div style={{ color: '#64748b', fontSize: '0.85rem', fontWeight: '500', marginBottom: '12px' }}>{stat.label}</div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                    <span style={{ fontSize: '2rem', fontWeight: 'bold', color: stat.color }}>{stat.val}</span>
+                                    <span style={{ fontSize: '0.75rem', color: stat.color, background: `${stat.color}10`, padding: '2px 8px', borderRadius: '6px' }}>{stat.detail}</span>
+                                </div>
                             </div>
-                        </div>
-                        <div style={{ background: 'rgba(17, 24, 39, 0.25)', backdropFilter: 'blur(4px)', padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ color: '#94a3b8', marginBottom: '1rem', fontSize: '0.9rem' }}>Classes Attended</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontSize: '2.2rem', fontWeight: 'bold', color: '#10b981' }}>{analytics.classes_attended}</span>
-                                <span style={{ fontSize: '0.85rem', color: '#10b981' }}>Live Logs</span>
-                            </div>
-                        </div>
-                        <div style={{ background: 'rgba(17, 24, 39, 0.25)', backdropFilter: 'blur(4px)', padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ color: '#94a3b8', marginBottom: '1rem', fontSize: '0.9rem' }}>Classes Missed</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontSize: '2.2rem', fontWeight: 'bold', color: '#ef4444' }}>{analytics.classes_missed}</span>
-                                <span style={{ fontSize: '0.85rem', color: '#ef4444' }}>{analytics.classes_missed > 5 ? "Alert" : "Normal"}</span>
-                            </div>
-                        </div>
-                        <div style={{ background: 'rgba(17, 24, 39, 0.25)', backdropFilter: 'blur(4px)', padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ color: '#94a3b8', marginBottom: '1rem', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between' }}>
-                                <span>Modules</span>
-                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Active</span>
-                            </div>
-                            <div style={{ fontSize: '2.2rem', fontWeight: 'bold', color: '#c084fc' }}>{analytics.modules_count}</div>
-                        </div>
+                        ))}
                     </div>
 
-                    {/* Chart Area */}
-                    <div style={{ background: 'rgba(17, 24, 39, 0.25)', backdropFilter: 'blur(4px)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)', padding: '2rem' }}>
-                        <h3 style={{ fontSize: '1.2rem', margin: '0 0 2rem 0', fontWeight: 'bold' }}>Attendance Engagement Trend</h3>
-                        <div style={{ height: '280px', position: 'relative' }}>
+                    {/* Chart Visualization */}
+                    <div style={{ background: 'rgba(15, 23, 42, 0.3)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.08)', padding: '2rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                            <h3 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 'bold' }}>Engagement Probability Curve</h3>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Last 7 Active Weeks</span>
+                        </div>
+                        <div style={{ height: '320px' }}>
                             <Line data={chartData} options={chartOptions} />
                         </div>
                     </div>
 
-                    {/* Enrolled Modules Progress Bars */}
-                    <div style={{ background: 'rgba(17, 24, 39, 0.25)', backdropFilter: 'blur(4px)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)', padding: '2rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: '0.75rem', marginBottom: '2rem' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 'bold' }}>Enrolled Modules Progress</h3>
-                        </div>
-
-                        {analytics.enrolled_modules.length > 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                {analytics.enrolled_modules.map((m, idx) => (
-                                    <div key={idx} style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.03)', padding: '1.2rem', borderRadius: '12px', gap: isMobile ? '1rem' : 0 }}>
-                                        <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', marginRight: '1.5rem' }}>
-                                            <BookOpen size={20} color="#94a3b8" />
+                    {/* Modules Grid */}
+                    <div style={{ background: 'rgba(15, 23, 42, 0.3)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.08)', padding: '2rem' }}>
+                        <h3 style={{ fontSize: '1.2rem', margin: '0 0 1.5rem 0', fontWeight: 'bold' }}>Active Module Performance</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1.2rem' }}>
+                            {analytics.enrolled_modules.map((m, idx) => (
+                                <div key={idx} style={{ padding: '1.2rem', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '18px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: '#f1f5f9' }}>{m.code}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>{m.name}</div>
                                         </div>
-                                        <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: '1rem' }}>
-                                            <div>
-                                                <div style={{ fontWeight: 'bold', fontSize: '1.05rem', marginBottom: '4px' }}>{m.code}</div>
-                                                <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{m.name}</div>
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', width: isMobile ? '100%' : '250px' }}>
-                                                <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
-                                                    <div style={{ width: `${m.rate}%`, height: '100%', background: getProgressColor(m.rate), borderRadius: '4px' }}></div>
-                                                </div>
-                                                <span style={{ color: getProgressColor(m.rate), fontWeight: 'bold', width: '40px', textAlign: 'right' }}>{m.rate}%</span>
-                                            </div>
-                                        </div>
+                                        <span style={{ color: getProgressColor(m.rate), fontWeight: 'bold', fontSize: '1rem' }}>{m.rate}%</span>
                                     </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>No course enrollments detected yet.</div>
-                        )}
+                                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                                        <div style={{ width: `${m.rate}%`, height: '100%', background: getProgressColor(m.rate), borderRadius: '3px' }}></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </main>
+
+            {/* MODALS */}
+            {showFeedbackModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div style={{ background: '#1e293b', width: '100%', maxWidth: '500px', borderRadius: '24px', padding: '2rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <h3 style={{ margin: '0 0 1.5rem 0', fontSize: '1.5rem' }}>Send Feedback</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: '#94a3b8' }}>Subject</label>
+                                <input value={feedbackSubject} onChange={e => setFeedbackSubject(e.target.value)} placeholder="e.g. Attendance Correction" style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#fff' }} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: '#94a3b8' }}>Message</label>
+                                <textarea value={feedbackMessage} onChange={e => setFeedbackMessage(e.target.value)} rows={4} placeholder="Describe your issue or feedback..." style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#fff', resize: 'none' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                                <button onClick={() => setShowFeedbackModal(false)} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}>Cancel</button>
+                                <button onClick={handleSendFeedback} style={{ flex: 2, padding: '12px', borderRadius: '12px', background: '#3b82f6', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: 'bold' }}>
+                                    <Send size={18} /> Send Message
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showPasswordModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div style={{ background: '#1e293b', width: '100%', maxWidth: '400px', borderRadius: '24px', padding: '2rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <h3 style={{ margin: '0 0 1.5rem 0', fontSize: '1.5rem' }}>Security Settings</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: '#94a3b8' }}>Current Password</label>
+                                <input type="password" value={oldPassword} onChange={e => setOldPassword(e.target.value)} style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#fff' }} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: '#94a3b8' }}>New Password</label>
+                                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#fff' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                                <button onClick={() => setShowPasswordModal(false)} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}>Cancel</button>
+                                <button onClick={handleChangePassword} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: '#3b82f6', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>Update Password</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
