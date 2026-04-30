@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from database import engine, Base
-from routes import auth, users, attendance, analytics, admin
+from routes import auth, users, attendance, analytics, admin, notifications, feedback
 
 # Create the database tables automatically
 Base.metadata.create_all(bind=engine)
@@ -44,6 +44,8 @@ app.include_router(users.router)
 app.include_router(attendance.router)
 app.include_router(analytics.router)
 app.include_router(admin.router)
+app.include_router(notifications.router)
+app.include_router(feedback.router)
 
 @app.get("/health")
 def health_check():
