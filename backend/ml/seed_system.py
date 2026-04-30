@@ -96,8 +96,6 @@ def run_seed():
                 time_slot = row["Time_Slot"]
                 attendance = row["Attendance"]
                 check_in_time = row["Check_In_Time"]
-                faculty = row["Faculty"]
-                year = row["Year"]
                 
                 # Sync Lecturer
                 if lect_id not in lecturers:
@@ -120,8 +118,8 @@ def run_seed():
                         password_hash=default_hashed_password,
                         full_name=stud_name,
                         student_reg_number=stud_id,
-                        faculty=faculty,
-                        year_of_study=year
+                        faculty="Data Science", # Force Data Science
+                        year_of_study="Level 2.2" # Force Level 2.2
                     )
                     db.add(user)
                     db.flush() # Populate ID
@@ -164,7 +162,7 @@ def run_seed():
                     db.flush() # Populate ID
                     sessions[session_key] = session
                 
-                # Enrollment
+                # Enrollment (Initial set from CSV)
                 if not hasattr(students[stud_id], "_enrolled"):
                     students[stud_id]._enrolled = set()
                 if courses[module].id not in students[stud_id]._enrolled:
@@ -192,6 +190,21 @@ def run_seed():
                 if row_count % 500 == 0:
                     print(f"Processed {row_count} rows...")
                     db.flush()
+
+        # FINAL STEP: Ensure all students are enrolled in ALL modules of the program
+        print("Ensuring all students are enrolled in all program modules...")
+        all_course_ids = [c.id for c in courses.values()]
+        for stud_reg, student_obj in students.items():
+            if not hasattr(student_obj, "_enrolled"):
+                student_obj._enrolled = set()
+            for c_id in all_course_ids:
+                if c_id not in student_obj._enrolled:
+                    enrollment = Enrollment(
+                        student_id=student_obj.id,
+                        course_id=c_id
+                    )
+                    db.add(enrollment)
+                    student_obj._enrolled.add(c_id)
 
         print("Committing all changes to database...")
         db.commit()
