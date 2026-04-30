@@ -19,7 +19,7 @@ def run_seed():
     # Check if database is already seeded with real data
     try:
         student_count = db.query(User).filter(User.role == 'student').count()
-        if student_count > 100:
+        if student_count > 100 and os.getenv("FORCE_RESEED") != "true":
             print("Database already seeded with real data. Skipping.")
             return
     except Exception:
@@ -56,7 +56,7 @@ def run_seed():
     courses = {} # name -> Course Object
     sessions = {} # (course_id, date, time_slot) -> ModuleSession Object
 
-    default_hashed_password = get_password_hash("password")
+    default_hashed_password = get_password_hash("tadiwa0627")
     
     with open(DATA_CSV_PATH, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
