@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+import datetime
 
 class UserCreate(BaseModel):
     role: str
@@ -99,3 +100,37 @@ class EnrollmentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class NotificationResponse(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    message: str
+    type: str
+    is_read: bool
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+class FeedbackCreate(BaseModel):
+    receiver_id: Optional[int] = None
+    subject: str
+    message: str
+
+class FeedbackResponse(BaseModel):
+    id: int
+    sender_id: int
+    receiver_id: Optional[int] = None
+    subject: str
+    message: str
+    created_at: datetime.datetime
+    sender: UserResponse
+    receiver: Optional[UserResponse] = None
+
+    class Config:
+        from_attributes = True
+
+class PasswordChange(BaseModel):
+    old_password: str
+    new_password: str
