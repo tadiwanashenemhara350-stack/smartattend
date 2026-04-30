@@ -13,7 +13,23 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIST_DIR = PROJECT_ROOT / "frontend" / "dist"
 INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
 
+import os
+import threading
+from ml.seed_system import run_seed
+
 app = FastAPI(title="Attendance Management System API")
+
+@app.on_event("startup")
+def startup_event():
+    # Run seeding in a background thread to avoid blocking the port binding
+    # Render kills the deploy if the port isn't opened quickly.
+    if os.getenv("FORCE_RESEED") == "true":
+        print("FORCE_RESEED detected. Starting background seeding...")
+        thread = threading.Thread(target=run_seed)
+        thread.daemon = True
+        thread.start()
+    else:
+        print("Background seeding skipped (FORCE_RESEED not set).")
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,18 +48,6 @@ app.include_router(admin.router)
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
-
-@app.get("/debug-500", include_in_schema=False)
-def debug_500():
-    import traceback
-    try:
-        from database import engine
-        from sqlalchemy import text
-        with engine.connect() as conn:
-            user_count = conn.execute(text("SELECT count(*) FROM users")).scalar()
-        return {"status": "ok", "user_count": user_count}
-    except Exception:
-        return {"status": "error", "traceback": traceback.format_exc()}
 
 @app.get("/robots.txt", include_in_schema=False)
 def robots_txt(request: Request):
