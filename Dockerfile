@@ -23,4 +23,4 @@ COPY --from=frontend-build /app/frontend/public ./frontend/public
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "cd /app/backend && python ml/seed_system.py && uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+CMD ["sh", "-c", "cd /app/backend && python ml/seed_system.py ; uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
