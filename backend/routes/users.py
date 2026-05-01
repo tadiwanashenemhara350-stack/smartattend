@@ -23,13 +23,14 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), admin: 
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists in the system")
         
+    password_to_hash = user.password if user.password else "tadiwa0627"
     new_user = models.User(
         role=user.role,
         full_name=user.full_name,
         email=user.email,
         student_reg_number=user.student_reg_number,
         lecturer_id=user.lecturer_id,
-        password_hash=get_password_hash(user.password) if user.password else None
+        password_hash=get_password_hash(password_to_hash)
     )
     db.add(new_user)
     db.commit()
