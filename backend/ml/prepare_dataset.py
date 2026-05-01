@@ -12,7 +12,7 @@ from passlib.context import CryptContext
 pwd_context =CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def run():
-    csv_path = r"C:\Users\windows 10\Downloads\msu_attendance_2026_dirty.csv"
+    csv_path = os.path.join(os.path.dirname(__file__), "msu_attendance_2026_dirty.csv")
     if not os.path.exists(csv_path):
         print(f"Error: {csv_path} not found.")
         return
@@ -121,11 +121,15 @@ def run():
     print("Engineering ML features...")
     # Group by student and module to get attendance aggregates
     # Attendance states: Present, Absent, Late
+    
+    # Ensure Date is datetime for correct sorting
+    df['Date'] = pd.to_datetime(df['Date'])
     grouped = df.groupby(['Student_ID', 'Module'])
     
     ml_data = []
     
     for (sid, mod), group in grouped:
+        group = group.sort_values('Date')
         total_classes = len(group)
         present = len(group[group['Attendance'] == 'Present'])
         late = len(group[group['Attendance'] == 'Late'])
@@ -134,6 +138,20 @@ def run():
         classes_attended = present + late
         attendance_ratio = classes_attended / total_classes if total_classes > 0 else 0
         late_ratio = late / total_classes if total_classes > 0 else 0
+        
+        # New Feature: Morning Absences
+        morning_classes = group[group['Time_Slot'] == '08:00-11:00']
+        morning_absences = len(morning_classes[morning_classes['Attendance'].isin(['Absent', 'Late'])])
+        
+        # New Feature: Consecutive Absences
+        consecutive_absences = 0
+        current_streak = 0
+        for status in group['Attendance']:
+            if status in ['Absent', 'Late']:
+                current_streak += 1
+                consecutive_absences = max(consecutive_absences, current_streak)
+            else:
+                current_streak = 0
         
         # Target Label: Failure Risk (1 = Failed/At Risk, 0 = Passed/Safe)
         # Assuming historical rule: <60% attendance = Failed.
@@ -145,6 +163,8 @@ def run():
             'late_arrivals': late,
             'attendance_ratio': attendance_ratio,
             'late_ratio': late_ratio,
+            'morning_absences': morning_absences,
+            'consecutive_absences': consecutive_absences,
             'is_failed': is_failed
         })
     
