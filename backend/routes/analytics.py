@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
-from ml.predictor import predict_risk, get_risk_probability, get_risk_explanation
+from ml.predictor import predict_risk, get_risk_probability, get_risk_explanation, get_model_performance, get_feature_importance
 import models
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -273,3 +273,13 @@ def get_student_dashboard_analytics(user_id: int, db: Session = Depends(get_db))
             "trajectory_description": trajectory_description
         }
     }
+
+@router.get("/performance")
+def analytics_performance():
+    """API endpoint to fetch model performance metrics."""
+    return get_model_performance()
+
+@router.get("/feature-importance")
+def analytics_feature_importance():
+    """API endpoint to fetch model feature importance."""
+    return get_feature_importance()
