@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+python-multipart
+qrcode
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==3.2.0
+email-validator
+psycopg2-binary
