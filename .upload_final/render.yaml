@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: smartattend
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartattend-db
+          property: connectionString
+
+databases:
+  - name: smartattend-db
+    plan: free
+    region: frankfurt
+    databaseName: smartattend
+    user: smartattend
