@@ -2,7 +2,7 @@ services:
   - type: web
     name: smartattend
     runtime: docker
-    plan: free
+    plan: starter
     region: frankfurt
     dockerfilePath: ./Dockerfile
     dockerContext: .
@@ -16,7 +16,7 @@ services:
 
 databases:
   - name: smartattend-db
-    plan: free
+    plan: basic-256mb
     region: frankfurt
     databaseName: smartattend
     user: smartattend
